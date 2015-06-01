@@ -1,3 +1,8 @@
+// heatbulk         June 2015
+// normally I store the NT and HT values every day except I'm not at home
+// since it is too cumbersome to do store more than one entry manually
+// I'm using this program
+
 package main
 
 import (
@@ -12,7 +17,6 @@ import (
 const heatpumpDB = "/home/mhusmann/Documents/src/pyt/heizung/heatpump.db"
 
 // const heatpumpDB = "heatpump.db"
-const nanoSecondsDay = 86400000000000
 const timeShortForm = "2006-01-02"
 const nanoSDay = 86400000000000
 
@@ -30,6 +34,7 @@ type dataSet struct {
 	tarifId          *int64
 }
 
+// init the rest of the struct
 func (e *dataSet) init() {
 	e.dayDb, e.htDb, e.ntDb = lastEntry(e.sql)
 	fmt.Printf("# Datenbank:       %s, HT: %6d, NT: %6d\n",
@@ -60,8 +65,6 @@ func (e *dataSet) init() {
 	e.daylyNt, e.restNt = e.diffNt/e.numOfDays, e.diffNt%e.numOfDays
 	fmt.Printf("# Täglich   Ht: %d, Rest: %d NT: %d, Rest: %d\n",
 		e.daylyHt, e.restHt, e.daylyNt, e.restNt)
-
-	// log.Fatalf("tarif Id = %d\n", *e.tarifId)
 }
 
 // calculate the difference between two dates.
@@ -79,7 +82,7 @@ func (e *dataSet) days() int64 {
 	return int64(d / time.Nanosecond)
 }
 
-// now iterate from the last date + 1day in the db to the current date
+// iterate from the last date + 1day in the db to the current date
 // inserting the amounts for Ht and Nt values + restHt and restNt
 func (e *dataSet) insertValues() {
 	baseDay, err := time.Parse(timeShortForm, e.dayDb)
@@ -107,11 +110,14 @@ func (e *dataSet) insertValues() {
 		e.ntDb += e.daylyNt + addNt
 		args := sqlite3.NamedArgs{"$day": day,
 			"$ht": e.htDb, "$nt": e.ntDb, "$tarifId": *e.tarifId}
-		e.sql.Exec("INSERT INTO dayly VALUES($x,$day,$ht,$nt,$tarifId)", args)
+		// $x is undefined, so a nil value is send to the database
+		e.sql.Exec("INSERT INTO dayly VALUES($x, $day, $ht, $nt, $tarifId)",
+			args)
 	}
-	fmt.Printf("# Inserted %d entries into %s\n", i, *e.dbName)
+	fmt.Printf("# Inserted %d entries into %s\n", i-1, *e.dbName)
 }
 
+// retrieve the last line from the db
 func lastEntry(sql *sqlite3.Conn) (string, int64, int64) {
 	dbResult, err := sql.Query("select max(day), max(ht), " +
 		"max(nt) from dayly")
@@ -126,7 +132,7 @@ func lastEntry(sql *sqlite3.Conn) (string, int64, int64) {
 }
 
 func main() {
-	dbName := flag.String("dbName", heatpumpDB,
+	dbName := flag.String("dbname", heatpumpDB,
 		"Pfad und Name der Datenbank")
 	day := flag.String("heute", "",
 		"Aktuelles Datum in Iso wie 2015-05-22")
@@ -146,7 +152,8 @@ func main() {
 	}
 	defer sql.Close()
 
-	e := dataSet{sql: sql, dbName: dbName, day: day, ht: ht, nt: nt, tarifId: tarifId}
+	e := dataSet{sql: sql, dbName: dbName, day: day, ht: ht,
+		nt: nt, tarifId: tarifId}
 	e.init()
 	e.insertValues()
 }
